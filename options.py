@@ -58,7 +58,8 @@ parser.add_argument('--test_negative_sampling_seed', type=int, default=None)
 ################
 parser.add_argument('--trainer_code', type=str, default='bert', choices=TRAINERS.keys())
 # device #
-parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'cuda'])
+parser.add_argument('--device', type=str, default='auto', choices=['auto', 'cpu', 'cuda', 'mps'],
+                    help='Device to run on. auto prefers MPS on Apple Silicon, then CUDA, then CPU')
 parser.add_argument('--num_gpu', type=int, default=1)
 parser.add_argument('--device_idx', type=str, default='0')
 # optimizer #
@@ -69,6 +70,7 @@ parser.add_argument('--momentum', type=float, default=None, help='SGD momentum')
 # lr scheduler #
 parser.add_argument('--decay_step', type=int, default=15, help='Decay step for StepLR')
 parser.add_argument('--gamma', type=float, default=0.1, help='Gamma for StepLR')
+parser.add_argument('--enable_lr_schedule', action='store_true')
 # epochs #
 parser.add_argument('--num_epochs', type=int, default=100, help='Number of epochs for training')
 # logger #

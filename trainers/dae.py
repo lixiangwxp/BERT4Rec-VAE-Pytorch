@@ -24,7 +24,7 @@ class DAETrainer(AbstractTrainer):
         pass
 
     def calculate_loss(self, batch):
-        input_x = torch.stack(batch)
+        input_x = batch if torch.is_tensor(batch) else torch.stack(batch)
         recon_x = self.model(input_x)
         CE = -torch.mean(torch.sum(F.log_softmax(recon_x, 1) * input_x, -1))
         return CE
@@ -32,6 +32,6 @@ class DAETrainer(AbstractTrainer):
     def calculate_metrics(self, batch):
         inputs, labels = batch
         logits = self.model(inputs)
-        logits[inputs!=0] = -float("Inf") # IMPORTANT: remove items that were in the input
+        logits = logits.masked_fill(inputs != 0, -float("Inf"))
         metrics = recalls_and_ndcgs_for_ks(logits, labels, self.metric_ks)
         return metrics

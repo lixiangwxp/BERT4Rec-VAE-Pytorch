@@ -9,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 import json
+import os
 from abc import *
 from pathlib import Path
 
@@ -16,9 +17,9 @@ from pathlib import Path
 class AbstractTrainer(metaclass=ABCMeta):
     def __init__(self, args, model, train_loader, val_loader, test_loader, export_root):
         self.args = args
-        self.device = args.device
+        self.device = torch.device(args.device)
         self.model = model.to(self.device)
-        self.is_parallel = args.num_gpu > 1
+        self.is_parallel = self.device.type == 'cuda' and args.num_gpu > 1
         if self.is_parallel:
             self.model = nn.DataParallel(self.model)
 
@@ -84,8 +85,8 @@ class AbstractTrainer(metaclass=ABCMeta):
         tqdm_dataloader = tqdm(self.train_loader)
 
         for batch_idx, batch in enumerate(tqdm_dataloader):
-            batch_size = batch[0].size(0)
-            batch = [x.to(self.device) for x in batch]
+            batch_size = self._get_batch_size(batch)
+            batch = self._move_batch_to_device(batch)
 
             self.optimizer.zero_grad()
             loss = self.calculate_loss(batch)
@@ -120,7 +121,7 @@ class AbstractTrainer(metaclass=ABCMeta):
         with torch.no_grad():
             tqdm_dataloader = tqdm(self.val_loader)
             for batch_idx, batch in enumerate(tqdm_dataloader):
-                batch = [x.to(self.device) for x in batch]
+                batch = self._move_batch_to_device(batch)
 
                 metrics = self.calculate_metrics(batch)
 
@@ -145,8 +146,10 @@ class AbstractTrainer(metaclass=ABCMeta):
     def test(self):
         print('Test best model with test set!')
 
-        best_model = torch.load(os.path.join(self.export_root, 'models', 'best_acc_model.pth')).get('model_state_dict')
-        self.model.load_state_dict(best_model)
+        best_model = torch.load(os.path.join(self.export_root, 'models', 'best_acc_model.pth'),
+                                map_location=self.device).get('model_state_dict')
+        target_model = self.model.module if self.is_parallel else self.model
+        target_model.load_state_dict(best_model)
         self.model.eval()
 
         average_meter_set = AverageMeterSet()
@@ -154,7 +157,7 @@ class AbstractTrainer(metaclass=ABCMeta):
         with torch.no_grad():
             tqdm_dataloader = tqdm(self.test_loader)
             for batch_idx, batch in enumerate(tqdm_dataloader):
-                batch = [x.to(self.device) for x in batch]
+                batch = self._move_batch_to_device(batch)
 
                 metrics = self.calculate_metrics(batch)
 
@@ -209,3 +212,19 @@ class AbstractTrainer(metaclass=ABCMeta):
 
     def _needs_to_log(self, accum_iter):
         return accum_iter % self.log_period_as_iter < self.args.train_batch_size and accum_iter != 0
+
+    def _move_batch_to_device(self, batch):
+        if torch.is_tensor(batch):
+            return batch.to(self.device)
+        if isinstance(batch, (list, tuple)):
+            return [self._move_batch_to_device(x) for x in batch]
+        if isinstance(batch, dict):
+            return {k: self._move_batch_to_device(v) for k, v in batch.items()}
+        return batch
+
+    def _get_batch_size(self, batch):
+        if torch.is_tensor(batch):
+            return batch.size(0)
+        if isinstance(batch, (list, tuple)):
+            return self._get_batch_size(batch[0])
+        raise TypeError('Cannot infer batch size from {}'.format(type(batch)))

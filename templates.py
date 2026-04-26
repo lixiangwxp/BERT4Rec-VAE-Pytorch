@@ -1,3 +1,9 @@
+def _set_device_defaults(args):
+    args.device = getattr(args, 'device', 'auto') or 'auto'
+    args.num_gpu = 1
+    args.device_idx = getattr(args, 'device_idx', '0') or '0'
+
+
 def set_template(args):
     if args.template is None:
         return
@@ -25,9 +31,7 @@ def set_template(args):
         args.test_negative_sampling_seed = 98765
 
         args.trainer_code = 'bert'
-        args.device = 'cuda'
-        args.num_gpu = 1
-        args.device_idx = '0'
+        _set_device_defaults(args)
         args.optimizer = 'Adam'
         args.lr = 0.001
         args.enable_lr_schedule = True
@@ -65,9 +69,7 @@ def set_template(args):
         args.test_batch_size = batch
 
         args.trainer_code = 'dae'
-        args.device = 'cuda'
-        args.num_gpu = 1
-        args.device_idx = '0'
+        _set_device_defaults(args)
         args.optimizer = 'Adam'
         args.lr = 1e-3
         args.enable_lr_schedule = False
@@ -101,9 +103,7 @@ def set_template(args):
         args.test_batch_size = batch
 
         args.trainer_code = 'vae'
-        args.device = 'cuda'
-        args.num_gpu = 1
-        args.device_idx = '0'
+        _set_device_defaults(args)
         args.optimizer = 'Adam'
         args.lr = 1e-3
         args.enable_lr_schedule = False
@@ -139,9 +139,7 @@ def set_template(args):
         args.test_batch_size = batch
 
         args.trainer_code = 'vae'
-        args.device = 'cuda'
-        args.num_gpu = 1
-        args.device_idx = '0'
+        _set_device_defaults(args)
         args.optimizer = 'Adam'
         args.lr = 1e-3
         args.enable_lr_schedule = False
@@ -159,4 +157,3 @@ def set_template(args):
         args.vae_hidden_dim = 600
         args.vae_latent_dim = 200
         args.vae_dropout = 0.5
-

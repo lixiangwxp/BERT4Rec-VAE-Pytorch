@@ -7,6 +7,8 @@ import random
 from datetime import date
 from pathlib import Path
 
+os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
+
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
@@ -14,7 +16,7 @@ from torch import optim as optim
 
 
 def setup_train(args):
-    set_up_gpu(args)
+    set_up_device(args)
 
     export_root = create_experiment_export_folder(args)
     export_experiments_config_as_json(args, export_root)
@@ -63,27 +65,61 @@ def export_experiments_config_as_json(args, experiment_path):
 
 
 def fix_random_seed_as(random_seed):
+    if random_seed is None:
+        return
     random.seed(random_seed)
     torch.manual_seed(random_seed)
-    torch.cuda.manual_seed_all(random_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(random_seed)
     np.random.seed(random_seed)
-    cudnn.deterministic = True
-    cudnn.benchmark = False
+    if torch.cuda.is_available():
+        cudnn.deterministic = True
+        cudnn.benchmark = False
+
+
+def _mps_is_available():
+    return hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
+
+
+def resolve_device(requested_device):
+    requested_device = requested_device or 'auto'
+    if requested_device == 'auto':
+        if _mps_is_available():
+            return 'mps'
+        if torch.cuda.is_available():
+            return 'cuda'
+        return 'cpu'
+
+    if requested_device == 'mps' and not _mps_is_available():
+        raise RuntimeError('MPS was requested, but this PyTorch build cannot use Apple Metal/MPS.')
+    if requested_device == 'cuda' and not torch.cuda.is_available():
+        raise RuntimeError('CUDA was requested, but CUDA is not available.')
+    return requested_device
+
+
+def set_up_device(args):
+    args.device = resolve_device(args.device)
+    if args.device == 'cuda':
+        os.environ['CUDA_VISIBLE_DEVICES'] = args.device_idx
+        args.num_gpu = len(args.device_idx.split(","))
+    else:
+        args.num_gpu = 0
+    print('Using device: {}'.format(args.device))
 
 
 def set_up_gpu(args):
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.device_idx
-    args.num_gpu = len(args.device_idx.split(","))
+    set_up_device(args)
 
 
 def load_pretrained_weights(model, path):
-    chk_dict = torch.load(os.path.abspath(path))
+    chk_dict = torch.load(os.path.abspath(path), map_location='cpu')
     model_state_dict = chk_dict[STATE_DICT_KEY] if STATE_DICT_KEY in chk_dict else chk_dict['state_dict']
     model.load_state_dict(model_state_dict)
 
 
 def setup_to_resume(args, model, optimizer):
-    chk_dict = torch.load(os.path.join(os.path.abspath(args.resume_training), 'models/checkpoint-recent.pth'))
+    chk_dict = torch.load(os.path.join(os.path.abspath(args.resume_training), 'models/checkpoint-recent.pth'),
+                          map_location=args.device)
     model.load_state_dict(chk_dict[STATE_DICT_KEY])
     optimizer.load_state_dict(chk_dict[OPTIMIZER_STATE_DICT_KEY])
 

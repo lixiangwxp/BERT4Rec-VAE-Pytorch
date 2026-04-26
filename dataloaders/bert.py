@@ -42,7 +42,7 @@ class BertDataloader(AbstractDataloader):
     def _get_train_loader(self):
         dataset = self._get_train_dataset()
         dataloader = data_utils.DataLoader(dataset, batch_size=self.args.train_batch_size,
-                                           shuffle=True, pin_memory=True)
+                                           shuffle=True, pin_memory=self.args.device == 'cuda')
         return dataloader
 
     def _get_train_dataset(self):
@@ -59,7 +59,7 @@ class BertDataloader(AbstractDataloader):
         batch_size = self.args.val_batch_size if mode == 'val' else self.args.test_batch_size
         dataset = self._get_eval_dataset(mode)
         dataloader = data_utils.DataLoader(dataset, batch_size=batch_size,
-                                           shuffle=False, pin_memory=True)
+                                           shuffle=False, pin_memory=self.args.device == 'cuda')
         return dataloader
 
     def _get_eval_dataset(self, mode):
@@ -146,4 +146,3 @@ class BertEvalDataset(data_utils.Dataset):
         seq = [0] * padding_len + seq
 
         return torch.LongTensor(seq), torch.LongTensor(candidates), torch.LongTensor(labels)
-

@@ -47,7 +47,7 @@ class VAETrainer(AbstractTrainer):
         return self.__beta
 
     def calculate_loss(self, batch):
-        input_x = torch.stack(batch)
+        input_x = batch if torch.is_tensor(batch) else torch.stack(batch)
         recon_x, mu, logvar = self.model(input_x)
         CE = -torch.mean(torch.sum(F.log_softmax(recon_x, 1) * input_x, -1))
         KLD = -0.5 * torch.mean(torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
@@ -57,7 +57,7 @@ class VAETrainer(AbstractTrainer):
     def calculate_metrics(self, batch):
         inputs, labels = batch
         logits, _, _ = self.model(inputs)
-        logits[inputs!=0] = -float("Inf") # IMPORTANT: remove items that were in the input
+        logits = logits.masked_fill(inputs != 0, -float("Inf"))
         metrics = recalls_and_ndcgs_for_ks(logits, labels, self.metric_ks)
 
         # Annealing beta
